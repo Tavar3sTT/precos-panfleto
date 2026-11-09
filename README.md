@@ -12,6 +12,8 @@ O arquivo não é enviado para nenhum servidor. A leitura, a digitação e a ger
 2. Digite o preço de cada produto (`12,90` ou `1.250,00`). Enter vai para o próximo item.
 3. Baixe o PDF. O arquivo sai com o nome original e o sufixo `-com-precos`.
 
+No celular, cada produto aparece grande, um por vez, e o campo de preço fica fixo embaixo da tela. **Próximo** passa para o item seguinte. **Ver a página inteira** mostra o panfleto como no papel.
+
 Se o navegador fechar no meio, o botão **Continuar de onde parou** reabre o mesmo arquivo com os preços já digitados. Um PDF novo, com outro tamanho ou outra data, começa em branco.
 
 Quando uma caixa não for reconhecida, use **Marcar outra caixa** e clique no meio do campo de R$.

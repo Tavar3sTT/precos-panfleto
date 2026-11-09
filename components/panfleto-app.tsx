@@ -34,7 +34,7 @@ import {
   savePriceState,
   type FileMeta,
 } from "@/lib/persist";
-import { compareSlots, type PriceSlot } from "@/lib/slots";
+import { compareSlots, productFrame, type PriceSlot } from "@/lib/slots";
 
 type Phase = "home" | "loading" | "editor";
 
@@ -57,6 +57,8 @@ export function PanfletoApp() {
   const [downloading, setDownloading] = useState(false);
   const [pageBox, setPageBox] = useState({ width: 0, height: 0 });
   const [coarse, setCoarse] = useState(false);
+  const [narrow, setNarrow] = useState(false);
+  const [overview, setOverview] = useState(false);
 
   const fileRef = useRef<HTMLInputElement>(null);
   const stageRef = useRef<HTMLDivElement>(null);
@@ -71,11 +73,19 @@ export function PanfletoApp() {
   }, []);
 
   useEffect(() => {
-    const media = window.matchMedia("(pointer: coarse)");
-    const update = () => setCoarse(media.matches);
+    const coarseMedia = window.matchMedia("(pointer: coarse)");
+    const narrowMedia = window.matchMedia("(max-width: 1023px)");
+    const update = () => {
+      setCoarse(coarseMedia.matches);
+      setNarrow(narrowMedia.matches);
+    };
     update();
-    media.addEventListener("change", update);
-    return () => media.removeEventListener("change", update);
+    coarseMedia.addEventListener("change", update);
+    narrowMedia.addEventListener("change", update);
+    return () => {
+      coarseMedia.removeEventListener("change", update);
+      narrowMedia.removeEventListener("change", update);
+    };
   }, []);
 
   useEffect(() => {
@@ -275,15 +285,33 @@ export function PanfletoApp() {
   }, [phase]);
 
   const pageSize = catalog?.pageSizes[pageIndex];
+  const showCard =
+    narrow && !overview && !marking && !!active && active.pageIndex === pageIndex && pageSlots.length > 0;
+  const frame = showCard && active ? productFrame(active) : null;
   const cssWidth = useMemo(() => {
     if (!pageSize || stageSize.width < 40 || stageSize.height < 40) return 0;
     const aspect = pageSize.height / pageSize.width;
-    const availableWidth = Math.max(240, stageSize.width - (stageSize.width < 720 ? 20 : 56));
-    const availableHeight = Math.max(240, stageSize.height - 24);
+    const availableWidth = Math.max(220, stageSize.width - (narrow ? 8 : stageSize.width < 720 ? 20 : 56));
+    const availableHeight = Math.max(160, stageSize.height - (narrow ? 8 : 24));
+    if (frame) {
+      const fitWidth = availableWidth / frame.nw;
+      const frameHeight = fitWidth * aspect * frame.nh;
+      const width = frameHeight <= availableHeight ? fitWidth : availableHeight / frame.nh / aspect;
+      return Math.max(280, Math.floor(width));
+    }
     const contain = Math.min(availableWidth, availableHeight / aspect);
-    const width = zoom === "fit" ? contain : contain * 1.6;
-    return Math.max(240, Math.floor(width));
-  }, [pageSize, stageSize.height, stageSize.width, zoom]);
+    const width = zoom === "fit" || narrow ? contain : contain * 1.6;
+    return Math.max(220, Math.floor(width));
+  }, [frame, narrow, pageSize, stageSize.height, stageSize.width, zoom]);
+
+  const pageHeight =
+    pageBox.width === cssWidth && pageBox.height > 0
+      ? pageBox.height
+      : cssWidth && pageSize
+        ? cssWidth * (pageSize.height / pageSize.width)
+        : 0;
+  const pageLeft = frame ? (stageSize.width - frame.nw * cssWidth) / 2 - frame.nx * cssWidth : 0;
+  const pageTop = frame ? (stageSize.height - frame.nh * pageHeight) / 2 - frame.ny * pageHeight : 0;
 
   useEffect(() => {
     if (phase !== "editor" || !catalog || !canvasRef.current || cssWidth < 40) return;
@@ -308,13 +336,13 @@ export function PanfletoApp() {
     const slot = slots.find((item) => item.id === pending.id);
     if (!slot) return;
     if (!coarse && slot.pageIndex !== pageIndex) return;
-    const targetId = coarse ? "price-composer" : `price-${pending.id}`;
+    const targetId = coarse || narrow ? "price-composer" : `price-${pending.id}`;
     const element = document.getElementById(targetId) as HTMLInputElement | null;
     if (!element) return;
     pendingFocus.current = null;
     element.focus();
     if (pending.select) element.select();
-  }, [coarse, focusNonce, pageBox.width, pageIndex, phase, slots]);
+  }, [coarse, focusNonce, narrow, pageBox.width, pageIndex, phase, slots]);
 
   function hideActive() {
     if (!active) return;
@@ -349,6 +377,7 @@ export function PanfletoApp() {
     };
     setSlots((current) => [...current, slot].sort(compareSlots));
     setMarking(false);
+    setOverview(false);
     setActiveId(slot.id);
     pendingFocus.current = { id: slot.id, select: true };
     setFocusNonce((nonce) => nonce + 1);
@@ -395,38 +424,44 @@ export function PanfletoApp() {
     <div className="flex h-dvh flex-col bg-[#efeae1] text-[#1c2430]">
       {fileInput}
       <header className="shrink-0 bg-[#173a66] text-[#f6f3ec]">
-        <div className="flex flex-wrap items-center gap-x-4 gap-y-3 px-4 py-3 sm:px-6">
-          <div className="min-w-[12rem] flex-1">
-            <p className="text-[0.68rem] font-semibold tracking-[0.18em] text-[#f3d48a] uppercase">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2 sm:gap-x-4 sm:px-6 sm:py-3">
+          <div className="min-w-0 flex-1">
+            <p className="hidden text-[0.68rem] font-semibold tracking-[0.18em] text-[#f3d48a] uppercase sm:block">
               Encarte do dia
             </p>
-            <h1 className="text-xl leading-tight font-semibold">Preços do panfleto</h1>
+            <h1 className="truncate text-lg leading-tight font-semibold sm:text-xl">Preços do panfleto</h1>
           </div>
           {phase === "editor" && catalog && (
             <div className="flex flex-wrap items-center gap-2">
               <Button
                 variant="outline"
                 className="h-11 border-white/20 bg-white/5 text-[#f6f3ec] hover:bg-white/15 hover:text-white"
+                aria-label="Trocar PDF"
                 onClick={() => fileRef.current?.click()}
               >
                 <FolderOpen />
-                Trocar PDF
+                <span className="hidden sm:inline">Trocar PDF</span>
               </Button>
               <Button
                 variant="outline"
                 className="h-11 border-white/20 bg-white/5 text-[#f6f3ec] hover:bg-white/15 hover:text-white"
+                aria-label="Limpar preços"
                 onClick={() => setConfirmClear(true)}
               >
                 <Trash2 />
-                Limpar
+                <span className="hidden sm:inline">Limpar</span>
               </Button>
               <Button
-                className="h-11 bg-[#e6a317] px-4 text-base text-[#1c2430] hover:bg-[#d39310]"
+                className="h-11 bg-[#e6a317] px-3 text-base text-[#1c2430] hover:bg-[#d39310] sm:px-4"
+                aria-label="Baixar PDF"
                 disabled={filled === 0 || downloading}
                 onClick={() => void download()}
               >
                 <Download />
-                {downloading ? "Gerando…" : filled > 0 ? `Baixar PDF · ${filled}` : "Baixar PDF"}
+                <span className="sm:hidden">{filled > 0 ? filled : "PDF"}</span>
+                <span className="hidden sm:inline">
+                  {downloading ? "Gerando…" : filled > 0 ? `Baixar PDF · ${filled}` : "Baixar PDF"}
+                </span>
               </Button>
             </div>
           )}
@@ -479,8 +514,9 @@ export function PanfletoApp() {
       )}
 
       {phase === "editor" && catalog && (
-        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
-          <main className="flex h-[68vh] w-full shrink-0 flex-col lg:h-auto lg:min-h-0 lg:min-w-0 lg:flex-1">
+        <div className={`flex min-h-0 flex-1 ${narrow ? "flex-col overflow-hidden" : "flex-col overflow-y-auto lg:flex-row lg:overflow-hidden"}`}>
+          <main className={`flex w-full min-w-0 flex-col ${narrow ? "min-h-0 flex-1" : "h-[68vh] shrink-0 lg:h-auto lg:min-h-0 lg:flex-1"}`}>
+            {!narrow && (
             <div className="flex shrink-0 items-center justify-between gap-2 px-3 py-3 text-sm sm:px-5">
                 <Button
                   variant="outline"
@@ -527,6 +563,8 @@ export function PanfletoApp() {
                   </Button>
                 </div>
               </div>
+            )}
+              {!narrow && (
               <div className="flex justify-center gap-2 px-3 pb-2 sm:hidden">
                 <Button
                   variant={zoom === "fit" ? "default" : "outline"}
@@ -543,6 +581,7 @@ export function PanfletoApp() {
                   Ampliar
                 </Button>
               </div>
+              )}
 
               {marking && (
                 <p className="mx-auto mb-2 w-fit rounded-full bg-[#1d4e89] px-4 py-2 text-sm text-white">
@@ -550,16 +589,24 @@ export function PanfletoApp() {
                 </p>
               )}
 
-              <div ref={stageRef} className="min-h-0 flex-1 overflow-auto">
-              <div className="flex min-h-full flex-col items-center px-2 py-4 sm:px-6">
+              <div ref={stageRef} className={`min-h-0 flex-1 ${showCard ? "relative overflow-hidden" : "overflow-auto"}`}>
+              <div className={showCard ? "h-full" : "flex min-h-full flex-col items-center px-2 py-4 sm:px-6"}>
               <div
                 className="relative bg-white shadow-[0_18px_50px_rgba(28,36,48,0.16)]"
-                style={{
-                  width: cssWidth || undefined,
-                  height:
-                    pageBox.height ||
-                    (cssWidth && pageSize ? cssWidth * (pageSize.height / pageSize.width) : undefined),
-                }}
+                style={
+                  showCard
+                    ? {
+                        position: "absolute",
+                        left: pageLeft,
+                        top: pageTop,
+                        width: cssWidth || undefined,
+                        height: pageHeight || undefined,
+                      }
+                    : {
+                        width: cssWidth || undefined,
+                        height: pageHeight || undefined,
+                      }
+                }
                 onClick={placeManual}
               >
                 <canvas ref={canvasRef} className="block" />
@@ -584,6 +631,7 @@ export function PanfletoApp() {
                       onClick={(event) => {
                         event.stopPropagation();
                         if (marking) return;
+                        if (narrow) setOverview(false);
                         focusSlot(slot.id);
                       }}
                     >
@@ -629,6 +677,7 @@ export function PanfletoApp() {
             </div>
           </main>
 
+          {!narrow && (
           <aside className="shrink-0 border-t border-[#ddd4c4] bg-[#f7f4ee] lg:w-[22rem] lg:overflow-auto lg:border-t-0 lg:border-l">
             <div className="flex flex-col gap-4 p-4">
               <div>
@@ -773,6 +822,84 @@ export function PanfletoApp() {
               </p>
             </div>
           </aside>
+          )}
+          {narrow && (
+            <footer className="shrink-0 border-t border-[#ddd4c4] bg-[#f7f4ee] px-3 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+              <div className="mb-2 flex items-baseline justify-between gap-3">
+                <p className="text-sm font-semibold">
+                  {active ? `Produto ${activeOffset + 1} de ${slots.length}` : "Esta página não tem preço"}
+                </p>
+                <p className="text-sm text-[#5e584e]">{filled} preenchidos</p>
+              </div>
+              <label className="sr-only" htmlFor="price-composer">
+                Preço do produto
+              </label>
+              <div className="flex items-center gap-2 rounded-2xl border border-[#ddd4c4] bg-white px-3 focus-within:border-[#e6a317] focus-within:ring-2 focus-within:ring-[#e6a317]/40">
+                <span className="text-xl font-semibold text-[#5e584e]">R$</span>
+                <input
+                  id="price-composer"
+                  inputMode="decimal"
+                  enterKeyHint="next"
+                  autoComplete="off"
+                  spellCheck={false}
+                  disabled={!active}
+                  placeholder="0,00"
+                  className="h-16 w-full bg-transparent text-3xl font-semibold outline-none placeholder:text-[#b7b1a6]"
+                  value={active ? (prices[active.id] ?? "") : ""}
+                  onChange={(event) => {
+                    if (!active) return;
+                    setPrices((current) => ({ ...current, [active.id]: event.target.value }));
+                  }}
+                  onBlur={() => {
+                    if (active) commit(active.id);
+                  }}
+                  onKeyDown={(event) => {
+                    if (active) onPriceKeyDown(event, active.id);
+                  }}
+                />
+              </div>
+              {active && invalid[active.id] && (
+                <p className="mt-1 text-sm font-medium text-[#a33b32]">Não entendi este valor. Use 12,90.</p>
+              )}
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <Button
+                  variant="outline"
+                  className="h-12 bg-white text-base"
+                  disabled={activeOffset <= 0}
+                  onClick={() => goRelative(-1)}
+                >
+                  <ChevronLeft />
+                  Anterior
+                </Button>
+                <Button className="h-12 text-base" disabled={activeOffset < 0 || activeOffset >= slots.length - 1} onClick={() => goRelative(1)}>
+                  Próximo
+                  <ChevronRight />
+                </Button>
+              </div>
+              <div className="mt-2 flex items-center justify-between">
+                <button
+                  type="button"
+                  className="py-2 text-sm font-semibold text-[#1d4e89]"
+                  onClick={() => {
+                    setMarking(false);
+                    setOverview((value) => !value);
+                  }}
+                >
+                  {overview ? "Ver um produto" : "Ver a página inteira"}
+                </button>
+                <button
+                  type="button"
+                  className="py-2 text-sm text-[#5e584e]"
+                  onClick={() => {
+                    setOverview(true);
+                    setMarking(true);
+                  }}
+                >
+                  Marcar caixa
+                </button>
+              </div>
+            </footer>
+          )}
         </div>
       )}
     </div>
