@@ -20,10 +20,15 @@ export type Catalog = {
 
 let workerReady = false;
 
+function publicPath(path: string): string {
+  const base = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
+  return `${base}${path.startsWith("/") ? path : `/${path}`}`;
+}
+
 async function pdfjs() {
   const lib = await import("pdfjs-dist");
   if (!workerReady) {
-    lib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+    lib.GlobalWorkerOptions.workerSrc = publicPath("/pdf.worker.min.mjs");
     workerReady = true;
   }
   return lib;
@@ -167,7 +172,7 @@ export async function buildPricedPdf(
   const fontkit = fontkitModule.default;
   const pdf = await PDFDocument.load(bytes);
   pdf.registerFontkit(fontkit);
-  const fontResponse = await fetch("/fonts/Poppins-Bold.ttf");
+  const fontResponse = await fetch(publicPath("/fonts/Poppins-Bold.ttf"));
   if (!fontResponse.ok) throw new Error("font");
   const font = await pdf.embedFont(await fontResponse.arrayBuffer());
   const ink = rgb(0.07, 0.07, 0.08);

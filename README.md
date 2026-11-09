@@ -18,6 +18,19 @@ Se o navegador fechar no meio, o botão **Continuar de onde parou** reabre o mes
 
 Quando uma caixa não for reconhecida, use **Marcar outra caixa** e clique no meio do campo de R$.
 
+## Publicar de graça no GitHub Pages
+
+O aplicativo não precisa de servidor: o PDF é lido no navegador. O GitHub Pages hospeda esse tipo de site de graça, em um repositório público.
+
+Este projeto ainda não está ligado a uma conta do GitHub. Depois de criar um repositório público vazio (por exemplo `precos-panfleto`), sem README:
+
+```bash
+git remote add github https://github.com/SEU-USUARIO/precos-panfleto.git
+git push -u github main
+```
+
+No GitHub, abra **Settings → Pages** e escolha a origem **GitHub Actions**. O arquivo `.github/workflows/pages.yml` publica a cada envio para `main`. O endereço fica `https://SEU-USUARIO.github.io/precos-panfleto/`.
+
 ## Rodar localmente
 
 ```bash
